@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, AliasChoices
 from typing import Optional, List
 from datetime import datetime
 
@@ -25,4 +25,8 @@ class TokenData(BaseModel):
 class FileOut(BaseModel):
     filename: str
     size: int
-    last_modified: datetime
+    # Suporta tanto o antigo 'last_modified' quanto o novo 'upload_date' do banco
+    last_modified: datetime = Field(validation_alias=AliasChoices('upload_date', 'last_modified'))
+
+    class Config:
+        from_attributes = True
