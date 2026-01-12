@@ -1,6 +1,6 @@
 import asyncio
 from app.core.database import engine, Base
-from app.models.user import User
+from app.models import User, FileModel
 
 async def init_db():
     print("Criando tabelas no banco de dados...")

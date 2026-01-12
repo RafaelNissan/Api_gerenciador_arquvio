@@ -3,11 +3,13 @@ from fastapi.responses import FileResponse
 from typing import List
 from pathlib import Path
 import os
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import deps
 from app.models.user import User
 from app.services import file_service
 from app.schemas.user import FileOut
+from app.core.database import get_db
 
 router = APIRouter()
 
@@ -23,10 +25,11 @@ def sanitize_filename(filename: str) -> str:
 async def list_files(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
     """Lista arquivos do usuário com paginação e metadados."""
-    return await file_service.list_user_files(current_user.id, skip=skip, limit=limit)
+    return await file_service.list_user_files(db, current_user.id, skip=skip, limit=limit)
 
 @router.get("/{filename}")
 async def download_file(
@@ -62,11 +65,12 @@ async def download_file(
 @router.delete("/{filename}")
 async def delete_file(
     filename: str,
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
     """Deleta um arquivo do usuário logado."""
     safe_filename = sanitize_filename(filename)
-    success = await file_service.delete_user_file(current_user.id, safe_filename)
+    success = await file_service.delete_user_file(db, current_user.id, safe_filename)
     
     if not success:
         raise HTTPException(
@@ -79,6 +83,7 @@ async def delete_file(
 @router.post("/upload", status_code=status.HTTP_201_CREATED)
 async def upload_file(
     file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
     """Upload de arquivo com validações de tamanho, extensão e segurança."""
@@ -105,7 +110,7 @@ async def upload_file(
     try:
         # Voltar o cursor para o início antes de salvar através do serviço
         await file.seek(0)
-        filename = await file_service.save_user_file(current_user.id, file, safe_filename)
+        filename = await file_service.save_user_file(db, current_user.id, file, safe_filename)
         
         return {
             "message": "Arquivo enviado com sucesso",

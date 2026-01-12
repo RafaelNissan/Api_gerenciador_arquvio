@@ -4,6 +4,11 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from fastapi import UploadFile, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy import delete
+
+from app.models.file import FileModel
 
 UPLOAD_ROOT = Path("uploads")
 
@@ -17,8 +22,8 @@ async def ensure_user_directory(user_id: int) -> Path:
     user_dir.mkdir(parents=True, exist_ok=True)
     return user_dir
 
-async def save_user_file(user_id: int, file: UploadFile, custom_filename: Optional[str] = None) -> str:
-    """Salva um arquivo na pasta do usuário com verificação de duplicata."""
+async def save_user_file(db: AsyncSession, user_id: int, file: UploadFile, custom_filename: Optional[str] = None) -> str:
+    """Salva um arquivo na pasta do usuário e registra no banco de dados."""
     user_dir = await ensure_user_directory(user_id)
     filename = custom_filename or file.filename
     file_path = user_dir / filename
@@ -26,48 +31,79 @@ async def save_user_file(user_id: int, file: UploadFile, custom_filename: Option
     if file_path.exists():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Doidão, já existe um arquivo chamado '{filename}'! Tente outro nome."
+            detail=f"Já existe um arquivo chamado '{filename}'!"
         )
     
-    # Operação de I/O em bloco, mas em uma função assíncrona para compatibilidade
-    with file_path.open("wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-        return filename
+    # 1. Salvar arquivo físico
+    try:
+        with file_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao salvar arquivo físico: {str(e)}"
+        )
 
-async def list_user_files(user_id: int, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
-    """Lista arquivos do usuário com suporte a paginação."""
-    user_dir = await ensure_user_directory(user_id)
-    all_files = []
-    for f in user_dir.iterdir():
-        if f.is_file():
-            stats = f.stat()
-            all_files.append({
-                "filename": f.name,
-                "size": stats.st_size,
-                "last_modified": datetime.fromtimestamp(stats.st_mtime)
-            })
-    
-    # Ordenar por data de modificação (mais recentes primeiro)
-    all_files.sort(key=lambda x: x["last_modified"], reverse=True)
-    
-    # Aplicar paginação
-    return all_files[skip : skip + limit]
+    # 2. Registrar no Banco de Dados
+    try:
+        # Obter tamanho do arquivo
+        file_stats = file_path.stat()
+        
+        db_file = FileModel(
+            filename=filename,
+            content_type=file.content_type,
+            size=file_stats.st_size,
+            user_id=user_id
+        )
+        db.add(db_file)
+        await db.commit()
+        return filename
+    except Exception as e:
+        # Se falhar no banco, deleta o arquivo físico para manter consistência
+        if file_path.exists():
+            file_path.unlink()
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao registrar no banco: {str(e)}"
+        )
+
+async def list_user_files(db: AsyncSession, user_id: int, skip: int = 0, limit: int = 100) -> List[FileModel]:
+    """Lista arquivos do usuário consultando o banco de dados."""
+    result = await db.execute(
+        select(FileModel)
+        .filter(FileModel.user_id == user_id)
+        .order_by(FileModel.upload_date.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    return result.scalars().all()
 
 async def get_user_file_path(user_id: int, filename: str) -> Optional[Path]:
     """Retorna o caminho seguro de um arquivo do usuário."""
-    user_dir = await ensure_user_directory(user_id)
+    user_dir = await get_user_upload_path(user_id)
     file_path = (user_dir / filename).resolve()
     
-    # Prevenção de Path Traversal
     if not str(file_path).startswith(str(user_dir)):
         return None
         
     return file_path
 
-async def delete_user_file(user_id: int, filename: str) -> bool:
-    """Deleta um arquivo do usuário de forma segura."""
+async def delete_user_file(db: AsyncSession, user_id: int, filename: str) -> bool:
+    """Deleta um arquivo do banco e do sistema de arquivos."""
+    # 1. Remover do Banco
+    result = await db.execute(
+        delete(FileModel).where(FileModel.user_id == user_id, FileModel.filename == filename)
+    )
+    await db.commit()
+    
+    if result.rowcount == 0:
+        return False
+
+    # 2. Remover do Sistema de Arquivos
     file_path = await get_user_file_path(user_id, filename)
     if file_path and file_path.exists():
         file_path.unlink()
         return True
-    return False
+    
+    return True
