@@ -23,6 +23,9 @@ wheels/
 .installed.cfg
 *.egg
 
+# Frontend (Local only)
+/frontend/
+
 # Environment
 .env
 .venv
