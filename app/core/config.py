@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     """Configurações da aplicação"""
     
     # Database
+    # Se não houver DATABASE_URL no .env, usa o SQLite como fallback
     DATABASE_URL: str = "sqlite+aiosqlite:///./app.db"
     
     # Security

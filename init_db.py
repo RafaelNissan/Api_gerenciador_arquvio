@@ -4,9 +4,12 @@ from app.models.user import User
 
 async def init_db():
     print("Criando tabelas no banco de dados...")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    print("Tabelas criadas com sucesso!")
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        print("Tabelas criadas com sucesso!")
+    finally:
+        await engine.dispose()
 
 if __name__ == "__main__":
     asyncio.run(init_db())
