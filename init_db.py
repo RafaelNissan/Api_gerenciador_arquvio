@@ -1,10 +1,12 @@
+import asyncio
 from app.core.database import engine, Base
 from app.models.user import User
 
-def init_db():
+async def init_db():
     print("Criando tabelas no banco de dados...")
-    Base.metadata.create_all(bind=engine)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     print("Tabelas criadas com sucesso!")
 
 if __name__ == "__main__":
-    init_db()
+    asyncio.run(init_db())

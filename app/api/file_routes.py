@@ -20,22 +20,22 @@ def sanitize_filename(filename: str) -> str:
     return Path(filename).name
 
 @router.get("/", response_model=List[FileOut])
-def list_files(
+async def list_files(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
     current_user: User = Depends(deps.get_current_user)
 ):
     """Lista arquivos do usuário com paginação e metadados."""
-    return file_service.list_user_files(current_user.id, skip=skip, limit=limit)
+    return await file_service.list_user_files(current_user.id, skip=skip, limit=limit)
 
 @router.get("/{filename}")
-def download_file(
+async def download_file(
     filename: str,
     current_user: User = Depends(deps.get_current_user)
 ):
     """Baixa um arquivo do usuário com validação de escopo."""
     safe_filename = sanitize_filename(filename)
-    file_path = file_service.get_user_file_path(current_user.id, safe_filename)
+    file_path = await file_service.get_user_file_path(current_user.id, safe_filename)
     
     if not file_path or not file_path.exists():
         raise HTTPException(
@@ -44,7 +44,7 @@ def download_file(
         )
     
     # Dupla verificação de segurança (Cross-check)
-    user_dir = file_service.get_user_upload_path(current_user.id)
+    user_dir = await file_service.get_user_upload_path(current_user.id)
     try:
         file_path.relative_to(user_dir)
     except ValueError:
@@ -60,13 +60,13 @@ def download_file(
     )
 
 @router.delete("/{filename}")
-def delete_file(
+async def delete_file(
     filename: str,
     current_user: User = Depends(deps.get_current_user)
 ):
     """Deleta um arquivo do usuário logado."""
     safe_filename = sanitize_filename(filename)
-    success = file_service.delete_user_file(current_user.id, safe_filename)
+    success = await file_service.delete_user_file(current_user.id, safe_filename)
     
     if not success:
         raise HTTPException(
@@ -105,7 +105,7 @@ async def upload_file(
     try:
         # Voltar o cursor para o início antes de salvar através do serviço
         await file.seek(0)
-        filename = file_service.save_user_file(current_user.id, file, safe_filename)
+        filename = await file_service.save_user_file(current_user.id, file, safe_filename)
         
         return {
             "message": "Arquivo enviado com sucesso",

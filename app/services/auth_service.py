@@ -1,4 +1,5 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 from fastapi import HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
@@ -8,8 +9,10 @@ from app.schemas.user import UserCreate
 from app.core import security
 from app.core.config import settings
 
-def register_new_user(db: Session, user_in: UserCreate) -> User:
-    user = db.query(User).filter(User.username == user_in.username).first()
+async def register_new_user(db: AsyncSession, user_in: UserCreate) -> User:
+    result = await db.execute(select(User).filter(User.username == user_in.username))
+    user = result.scalars().first()
+    
     if user:
         raise HTTPException(
             status_code=400,
@@ -21,12 +24,14 @@ def register_new_user(db: Session, user_in: UserCreate) -> User:
         hashed_password=security.get_password_hash(user_in.password),
     )
     db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
+    await db.commit()
+    await db.refresh(db_user)
     return db_user
 
-def authenticate_user(db: Session, form_data: OAuth2PasswordRequestForm) -> dict:
-    user = db.query(User).filter(User.username == form_data.username).first()
+async def authenticate_user(db: AsyncSession, form_data: OAuth2PasswordRequestForm) -> dict:
+    result = await db.execute(select(User).filter(User.username == form_data.username))
+    user = result.scalars().first()
+    
     if not user or not security.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

@@ -7,19 +7,19 @@ from fastapi import UploadFile, HTTPException, status
 
 UPLOAD_ROOT = Path("uploads")
 
-def get_user_upload_path(user_id: int) -> Path:
+async def get_user_upload_path(user_id: int) -> Path:
     """Retorna o caminho do diretório de uploads do usuário."""
     return (UPLOAD_ROOT / str(user_id)).resolve()
 
-def ensure_user_directory(user_id: int) -> Path:
+async def ensure_user_directory(user_id: int) -> Path:
     """Garante que o diretório do usuário exista."""
-    user_dir = get_user_upload_path(user_id)
+    user_dir = await get_user_upload_path(user_id)
     user_dir.mkdir(parents=True, exist_ok=True)
     return user_dir
 
-def save_user_file(user_id: int, file: UploadFile, custom_filename: Optional[str] = None) -> str:
+async def save_user_file(user_id: int, file: UploadFile, custom_filename: Optional[str] = None) -> str:
     """Salva um arquivo na pasta do usuário com verificação de duplicata."""
-    user_dir = ensure_user_directory(user_id)
+    user_dir = await ensure_user_directory(user_id)
     filename = custom_filename or file.filename
     file_path = user_dir / filename
     
@@ -29,13 +29,14 @@ def save_user_file(user_id: int, file: UploadFile, custom_filename: Optional[str
             detail=f"Doidão, já existe um arquivo chamado '{filename}'! Tente outro nome."
         )
     
+    # Operação de I/O em bloco, mas em uma função assíncrona para compatibilidade
     with file_path.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
         return filename
 
-def list_user_files(user_id: int, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
+async def list_user_files(user_id: int, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
     """Lista arquivos do usuário com suporte a paginação."""
-    user_dir = ensure_user_directory(user_id)
+    user_dir = await ensure_user_directory(user_id)
     all_files = []
     for f in user_dir.iterdir():
         if f.is_file():
@@ -52,9 +53,9 @@ def list_user_files(user_id: int, skip: int = 0, limit: int = 100) -> List[Dict[
     # Aplicar paginação
     return all_files[skip : skip + limit]
 
-def get_user_file_path(user_id: int, filename: str) -> Optional[Path]:
+async def get_user_file_path(user_id: int, filename: str) -> Optional[Path]:
     """Retorna o caminho seguro de um arquivo do usuário."""
-    user_dir = ensure_user_directory(user_id)
+    user_dir = await ensure_user_directory(user_id)
     file_path = (user_dir / filename).resolve()
     
     # Prevenção de Path Traversal
@@ -63,9 +64,9 @@ def get_user_file_path(user_id: int, filename: str) -> Optional[Path]:
         
     return file_path
 
-def delete_user_file(user_id: int, filename: str) -> bool:
+async def delete_user_file(user_id: int, filename: str) -> bool:
     """Deleta um arquivo do usuário de forma segura."""
-    file_path = get_user_file_path(user_id, filename)
+    file_path = await get_user_file_path(user_id, filename)
     if file_path and file_path.exists():
         file_path.unlink()
         return True

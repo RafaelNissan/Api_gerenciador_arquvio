@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     """Configurações da aplicação"""
     
     # Database
-    DATABASE_URL: str = "sqlite:///./app.db"
+    DATABASE_URL: str = "sqlite+aiosqlite:///./app.db"
     
     # Security
     SECRET_KEY: str
