@@ -1,7 +1,7 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
 
-
+# BaseSettings é uma classe que ajuda a carregar as configurações do arquivo .env
 class Settings(BaseSettings):
     """Configurações da aplicação"""
     

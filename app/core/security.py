@@ -9,9 +9,12 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
+
+# Transforma uma senha por exemplo "123" em um hash irreconhecivel
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
+# Cria o token que dá acesso ao usuário
 def create_access_token(subject: Union[str, Any], expires_delta: timedelta = None) -> str:
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
