@@ -12,7 +12,7 @@ from app.models.file import FileModel
 
 UPLOAD_ROOT = Path("uploads")
 
-async def get_user_upload_path(user_id: int) -> Path:
+async def get_user_upload_path(user_id: int) -> Path: 
     """Retorna o caminho do diretório de uploads do usuário."""
     return (UPLOAD_ROOT / str(user_id)).resolve()
 
@@ -49,21 +49,21 @@ async def save_user_file(db: AsyncSession, user_id: int, file: UploadFile, custo
         # Obter tamanho do arquivo
         file_stats = file_path.stat()
         
-        db_file = FileModel(
-            filename=filename,
-            content_type=file.content_type,
-            size=file_stats.st_size,
-            user_id=user_id
+        db_file = FileModel( # Registra o arquivo no banco de dados
+            filename=filename, # Nome do arquivo
+            content_type=file.content_type, # Tipo do arquivo
+            size=file_stats.st_size, # Tamanho do arquivo
+            user_id=user_id # ID do usuário
         )
-        db.add(db_file)
-        await db.commit()
-        return filename
+        db.add(db_file) # Adiciona o arquivo ao banco de dados
+        await db.commit() # Comita a transação
+        return filename # Retorna o nome do arquivo
     except Exception as e:
         # Se falhar no banco, deleta o arquivo físico para manter consistência
-        if file_path.exists():
-            file_path.unlink()
-        await db.rollback()
-        raise HTTPException(
+        if file_path.exists(): # Verifica se o arquivo existe
+            file_path.unlink() # Deleta o arquivo
+        await db.rollback() # Desfaz a transação
+        raise HTTPException( # Lança uma exceção
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro ao registrar no banco: {str(e)}"
         )
@@ -71,11 +71,11 @@ async def save_user_file(db: AsyncSession, user_id: int, file: UploadFile, custo
 async def list_user_files(db: AsyncSession, user_id: int, skip: int = 0, limit: int = 100) -> List[FileModel]:
     """Lista arquivos do usuário consultando o banco de dados."""
     result = await db.execute(
-        select(FileModel)
-        .filter(FileModel.user_id == user_id)
-        .order_by(FileModel.upload_date.desc())
-        .offset(skip)
-        .limit(limit)
+        select(FileModel) # Seleciona todos os arquivos do usuario
+        .filter(FileModel.user_id == user_id) # Filtra pelo id do usuario
+        .order_by(FileModel.upload_date.desc()) # Ordena pelo data de upload
+        .offset(skip) # Pula os arquivos
+        .limit(limit) # Limita a quantidade de arquivos
     )
     return result.scalars().all()
 
@@ -93,17 +93,17 @@ async def delete_user_file(db: AsyncSession, user_id: int, filename: str) -> boo
     """Deleta um arquivo do banco e do sistema de arquivos."""
     # 1. Remover do Banco
     result = await db.execute(
-        delete(FileModel).where(FileModel.user_id == user_id, FileModel.filename == filename)
+        delete(FileModel).where(FileModel.user_id == user_id, FileModel.filename == filename) # Deleta o arquivo do banco
     )
     await db.commit()
     
-    if result.rowcount == 0:
+    if result.rowcount == 0: # Verifica se o arquivo foi deletado
         return False
 
     # 2. Remover do Sistema de Arquivos
-    file_path = await get_user_file_path(user_id, filename)
-    if file_path and file_path.exists():
-        file_path.unlink()
+    file_path = await get_user_file_path(user_id, filename) # Pega o caminho do arquivo
+    if file_path and file_path.exists(): # Verifica se o arquivo existe
+        file_path.unlink() # Deleta o arquivo
         return True
     
     return True
