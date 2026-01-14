@@ -14,7 +14,7 @@ from app.core.database import get_db
 router = APIRouter()
 
 # Configurações de Segurança
-ALLOWED_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png', '.txt', '.docx', '.xlsx', '.zip'} # Tipos de arquivos permitidos
+ALLOWED_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png', '.txt', '.docx', '.xlsx', '.zip', '.rar'} # Tipos de arquivos permitidos
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB Tamanho maximo do arquivo
 
 def sanitize_filename(filename: str) -> str:
