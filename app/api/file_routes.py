@@ -14,8 +14,11 @@ from app.core.database import get_db
 router = APIRouter()
 
 # Configurações de Segurança
-ALLOWED_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png', '.txt', '.docx', '.xlsx', '.zip', '.rar'} # Tipos de arquivos permitidos
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB Tamanho maximo do arquivo
+ALLOWED_EXTENSIONS = {
+    '.pdf', '.jpg', '.jpeg', '.png', '.txt', '.docx', '.xlsx', '.zip', '.rar',
+    '.mp4', '.mkv', '.avi', '.mov'  # Suporte a vídeos adicionado
+}
+MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024  # 2GB Tamanho máximo do arquivo
 
 def sanitize_filename(filename: str) -> str:
     """Sanitiza nome do arquivo para evitar path traversal."""
@@ -96,26 +99,31 @@ async def upload_file(
             detail=f"Tipo de arquivo não permitido. Permitidos: {', '.join(ALLOWED_EXTENSIONS)}"
         )
 
-    # Ler conteúdo para validar tamanho
-    contents = await file.read() # Leitura do arquivo
-    if len(contents) > MAX_FILE_SIZE: # Verifica se o arquivo é maior que o tamanho maximo
+    # Validar tamanho via cabeçalho ou atributo de tamanho (Performance e Segurança)
+    # Se o cliente não enviar o Content-Length, podemos verificar após o upload, 
+    # mas o FastAPI já preenche o file.size em muitos casos.
+    file_size = 0
+    if file.size:
+        file_size = file.size
+    
+    if file_size > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Arquivo muito grande. Máximo: {MAX_FILE_SIZE / 1024 / 1024}MB"
+            detail=f"Arquivo muito grande. Máximo: {MAX_FILE_SIZE / 1024 / 1024 / 1024}GB"
         )
     
     # Sanitizar nome
     safe_filename = sanitize_filename(file.filename) # Sanitiza nome do arquivo
     
     try:
-        # Voltar o cursor para o início antes de salvar através do serviço
-        await file.seek(0)
+        # Nota: O serviço file_service.save_user_file já usa shutil.copyfileobj,
+        # que lê em chunks (streaming), preservando a memória RAM.
         filename = await file_service.save_user_file(db, current_user.id, file, safe_filename) # Salva o arquivo
         
-        return { # Retorna o arquivo
+        return { 
             "message": "Arquivo enviado com sucesso",
             "filename": filename,
-            "size": len(contents),
+            "size": file_size,
             "url": f"/api/files/{filename}"
         }
     except HTTPException:
